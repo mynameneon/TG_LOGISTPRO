@@ -1,0 +1,11 @@
+{
+  "name": "Логист",
+  "short_name": "Логист",
+  "description": "Навигатор-логист для курьеров и водителей в Киеве",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f0f13",
+  "theme_color": "#0f0f13",
+  "lang": "ru",
+  "icons": []
+}
