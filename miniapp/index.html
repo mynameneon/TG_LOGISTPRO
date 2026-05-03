@@ -7,10 +7,8 @@
 <title>Логист</title>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.css" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.8.0/mapbox-gl.js"></script>
 
 <style>
   :root{
@@ -131,10 +129,15 @@
 
   /* ------- MAP SCREEN ------- */
   .map-wrap{flex:1;position:relative;overflow:hidden;background:#0a0a10}
-  #map{width:100%;height:100%}
-  #map-nav{width:100%;height:100%}
-  .map-rotator{position:absolute;inset:0;transition:transform .5s cubic-bezier(.2,.7,.3,1);
-    transform-origin:50% 50%;}
+  #map,#map-nav{width:100%;height:100%;position:absolute;inset:0}
+  /* Mapbox GL dark tweaks */
+  .mapboxgl-ctrl-attrib{background:rgba(26,26,36,.7)!important;color:var(--muted)!important;font-size:10px}
+  .mapboxgl-ctrl-attrib a{color:var(--muted)!important}
+  .mapboxgl-ctrl-group{background:var(--card)!important;border:0!important}
+  .mapboxgl-ctrl-group button{background:var(--card)!important;border-color:var(--border)!important}
+  .mapboxgl-ctrl-group button span{filter:invert(.85)}
+  .mapboxgl-popup-content{background:var(--card);color:var(--text);border-radius:10px;border:1px solid var(--border)}
+  .mapboxgl-popup-tip{border-top-color:var(--card)!important;border-bottom-color:var(--card)!important}
 
   .route-info{background:var(--card);border-top:1px solid var(--border);
     max-height:40vh;overflow-y:auto;padding:14px 16px calc(12px + env(safe-area-inset-bottom));}
@@ -178,13 +181,13 @@
   /* маркеры */
   .pulse-marker{width:18px;height:18px;border-radius:50%;background:var(--accent);
     border:3px solid #fff;box-shadow:0 0 0 0 rgba(79,140,255,.7);animation:pulseRing 1.8s infinite}
-  .user-arrow{width:34px;height:34px;display:flex;align-items:center;justify-content:center;
-    transform-origin:50% 50%;transition:transform .4s ease-out;}
-  .user-arrow::before{content:"";width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;
-    border-bottom:18px solid var(--accent);filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+  .user-arrow{width:38px;height:38px;display:flex;align-items:center;justify-content:center}
+  .user-arrow::before{content:"";width:0;height:0;
+    border-left:11px solid transparent;border-right:11px solid transparent;
+    border-bottom:22px solid var(--accent);filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
   .num-marker{width:32px;height:32px;border-radius:50% 50% 50% 0;background:var(--accent);
     transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
-    border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.4)}
+    border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.4);cursor:pointer}
   .num-marker span{transform:rotate(45deg);color:#fff;font-weight:700;font-size:13px}
   .num-marker.start{background:var(--accent-2)}
   .num-marker.end{background:var(--danger)}
@@ -192,6 +195,26 @@
   .num-marker.done span::before{content:"✓";}
   .num-marker.done span{font-size:0}
   .num-marker.done span::before{font-size:14px}
+
+  /* NAV BANNER (turn-by-turn instruction) */
+  .nav-banner{position:absolute;top:calc(12px + env(safe-area-inset-top));left:12px;right:12px;
+    background:rgba(26,26,36,.94);backdrop-filter:blur(12px);border:1px solid var(--border);
+    border-radius:16px;padding:12px 14px;z-index:500;box-shadow:0 10px 30px rgba(0,0,0,.45);
+    display:flex;gap:12px;align-items:center}
+  .maneuver-icon{font-size:32px;line-height:1;min-width:42px;text-align:center;color:var(--accent)}
+  .maneuver-body{flex:1;min-width:0}
+  .maneuver-distance{font-size:18px;font-weight:800;color:var(--accent-2);letter-spacing:.3px}
+  .maneuver-text{font-size:13px;color:var(--text);margin-top:2px;line-height:1.3;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical}
+
+  /* LOCK / RECENTER button */
+  .lock-btn{position:absolute;right:12px;bottom:calc(140px + env(safe-area-inset-bottom));
+    width:48px;height:48px;border-radius:50%;background:rgba(26,26,36,.94);
+    backdrop-filter:blur(12px);border:1px solid var(--border);z-index:500;
+    display:flex;align-items:center;justify-content:center;font-size:20px;
+    box-shadow:0 6px 20px rgba(0,0,0,.5);color:var(--text);transition:transform .15s}
+  .lock-btn:active{transform:scale(.92)}
+  .lock-btn.locked{background:var(--accent);color:#fff;border-color:var(--accent)}
 
   /* ------- COMPLETION ------- */
   .complete-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -257,12 +280,6 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes bounce{0%{transform:scale(.3)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
 
-  /* Leaflet dark tweaks */
-  .leaflet-container{background:#0a0a10}
-  .leaflet-control-attribution{background:rgba(26,26,36,.8)!important;color:var(--muted)!important;font-size:10px}
-  .leaflet-control-attribution a{color:var(--muted)!important}
-  .leaflet-control-zoom a{background:var(--card)!important;color:var(--text)!important;border:0!important}
-  .leaflet-control-zoom a:hover{background:var(--card2)!important}
 </style>
 </head>
 <body>
@@ -312,8 +329,23 @@
 <!-- ============ SCREEN 3: NAVIGATION ============ -->
 <div id="nav-screen" class="screen hidden">
   <div class="map-wrap" style="position:relative">
-    <div class="map-rotator" id="map-rotator"><div id="map-nav"></div></div>
-    <div class="hud" id="hud"></div>
+    <div id="map-nav"></div>
+
+    <!-- Top: turn-by-turn maneuver banner -->
+    <div class="nav-banner" id="nav-banner">
+      <div class="maneuver-icon" id="maneuver-icon">↑</div>
+      <div class="maneuver-body">
+        <div class="maneuver-distance" id="maneuver-distance">—</div>
+        <div class="maneuver-text" id="maneuver-text">—</div>
+      </div>
+    </div>
+
+    <!-- HUD с текущим доставочным пунктом -->
+    <div class="hud" id="hud" style="top:auto;bottom:calc(72px + env(safe-area-inset-bottom))"></div>
+
+    <!-- Lock/unlock heading -->
+    <button class="lock-btn locked" id="lock-btn" title="Привязать к движению">🔒</button>
+
     <button class="nav-back" id="nav-back" data-i18n="back_to_list">↩ Список</button>
     <button class="icon-btn" id="open-ext-nav-2" title="Открыть в навигаторе"
       style="position:absolute;top:calc(14px + env(safe-area-inset-top));left:12px;z-index:501;background:rgba(26,26,36,.92);backdrop-filter:blur(10px);border:1px solid var(--border)">📲</button>
@@ -557,31 +589,39 @@ function applyI18n(){
 let stops = JSON.parse(localStorage.getItem('stops') || '[]');
 let nextId = Math.max(0, ...stops.map(s=>s.id||0)) + 1;
 let editingId = null;
-let routeData = null;      // {ordered, distance, duration, geometry}
-let routeVariants = null;  // [{variant, ordered, distance, duration, geometry}, ...]
-let selectedVariantIdx = 0; // index of selected variant
-let userPos = null;        // {lat, lon}
-let userMarker = null;
-let routePolyline = null;
-let stopMarkers = [];
-let map = null, mapNav = null;
-let navState = null;       // {currentIndex, remaining, deliveredCount}
+let routeData = null;       // {ordered, distance, duration, geometry, legs, steps}
+let routeVariants = null;
+let selectedVariantIdx = 0;
+let userPos = null;         // {lat, lon}
+let userMarker = null;      // mapboxgl.Marker
+let stopMarkers = [];       // [mapboxgl.Marker]
+let map = null, mapNav = null; // mapboxgl.Map instances
+let navState = null;
 let watchId = null;
 let currentHeading = 0;
-let lastMoveTs = 0;
 let startTime = 0;
 let travelledKm = 0;
+
+// Navigation camera state
+let cameraLocked = true;    // когда true — карта едет за пользователем и крутится по компасу
+let lastCamUpdate = 0;
+
+// Turn-by-turn state
+let navSteps = [];          // flat array of Mapbox route steps
+let currentStepIdx = 0;
 
 const KYIV_CENTER = [50.4501, 30.5234];
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 const OSRM = 'https://router.project-osrm.org';
-// Mapbox config — store token in localStorage
+const MAPBOX_STYLE = 'mapbox://styles/mapbox/standard';
 let MAPBOX_TOKEN = localStorage.getItem('mapbox_token') || 'pk.eyJ1IjoibWFlc3Ryb2JsdWVudGFubyIsImEiOiJjbW9uOWpoYm4weTFvMnJyMjRpbGo4MHN0In0.LXgtVl7_MTD9SgWxAt7AjA';
-const MAPBOX_DIRECTIONS = 'https://api.mapbox.com/directions/v5/mapbox/driving';
+
+if(window.mapboxgl) mapboxgl.accessToken = MAPBOX_TOKEN;
 
 function saveMapboxToken(token){
   MAPBOX_TOKEN = token;
   localStorage.setItem('mapbox_token', token);
+  if(window.mapboxgl) mapboxgl.accessToken = token;
 }
 
 function saveStops(){ localStorage.setItem('stops', JSON.stringify(stops)); }
@@ -643,12 +683,18 @@ function updateMainButton(screen){
       fallbackBtn.classList.add('pulse');
     }
   } else if(screen==='map-screen'){
+    const goBtn = document.getElementById('go-btn');
     if(mb){
       mb.setText(t('start_navigation'));
       mb.color = '#00c896'; mb.textColor = '#ffffff';
       handler = ()=>startNavigation();
       mb.onClick(handler);
       mb.show();
+      // Telegram MainButton уже виден — прячем in-app CTA, чтобы не было двух кнопок
+      goBtn?.classList.add('hidden');
+    } else {
+      // MainButton нет — показываем встроенную «В путь»
+      goBtn?.classList.remove('hidden');
     }
     fallbackBtn.classList.add('hidden');
   } else if(screen==='nav-screen'){
@@ -929,47 +975,110 @@ function nearestNeighborOrder(start, pts){
   return order;
 }
 
-// ===== Mapbox: alternative routes via driving-traffic with congestion analysis =====
-async function getMapboxAlternatives(start, pts){
-  if(!MAPBOX_TOKEN) return null;
+// ===== Mapbox: оптимизация порядка точек (Travelling Salesman) =====
+async function optimizeOrderMapbox(start, pts){
+  if(!MAPBOX_TOKEN || pts.length < 2) return pts;
   const coords = [`${start.lon},${start.lat}`, ...pts.map(p=>`${p.lon},${p.lat}`)].join(';');
-  const lang = currentLang === 'ua' ? 'uk' : 'ru';
-  const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coords}` +
-    `?alternatives=true&geometries=geojson&overview=full&steps=true` +
-    `&annotations=congestion,distance&language=${lang}&access_token=${MAPBOX_TOKEN}`;
+  const url = `https://api.mapbox.com/optimized-trips/v1/mapbox/driving-traffic/${coords}` +
+    `?source=first&destination=any&roundtrip=false&geometries=geojson&overview=simplified` +
+    `&access_token=${MAPBOX_TOKEN}`;
   try {
     const r = await fetch(url);
     const data = await r.json();
-    if(data.code !== 'Ok' || !data.routes?.length) {
-      console.warn('Mapbox directions failed:', data);
+    if(data.code !== 'Ok' || !data.waypoints) {
+      console.warn('Optimization failed, using original order:', data);
+      return pts;
+    }
+    // waypoints[0] — старт, далее — наши точки в том же порядке, что передали,
+    // но с полем waypoint_index = желаемый порядок посещения (0 = первый после старта).
+    const wps = data.waypoints.slice(1);
+    const ordered = wps
+      .map((w, i) => ({ stop: pts[i], idx: w.waypoint_index }))
+      .sort((a, b) => a.idx - b.idx)
+      .map(x => x.stop);
+    return ordered;
+  } catch(e) {
+    console.warn('Optimization error:', e);
+    return pts;
+  }
+}
+
+// ===== Анализ маршрута для классификации =====
+function analyzeRoute(route){
+  let turns = 0, heavyMeters = 0, totalMeters = 0;
+  route.legs?.forEach(leg => {
+    leg.steps?.forEach(step => {
+      const m = step.maneuver?.type;
+      const mod = step.maneuver?.modifier || '';
+      if(m === 'turn' && /left|right/.test(mod)) turns++;
+      else if(['roundabout','rotary','exit roundabout','exit rotary','fork','merge','end of road'].includes(m)) turns++;
+    });
+    const cong = leg.annotation?.congestion || [];
+    const dists = leg.annotation?.distance || [];
+    cong.forEach((c, idx) => {
+      const d = dists[idx] || 0;
+      totalMeters += d;
+      if(c === 'heavy' || c === 'severe') heavyMeters += d;
+    });
+  });
+  return { turns, heavyMeters, totalMeters };
+}
+
+// Грубое сравнение геометрий: считаем среднее значение средней координаты.
+function geometryKey(geo){
+  const c = geo?.coordinates || [];
+  if(!c.length) return '';
+  const mid = c[Math.floor(c.length/2)];
+  return `${Math.round(geo.distance||0)}_${mid[0].toFixed(3)}_${mid[1].toFixed(3)}`;
+}
+
+// ===== Mapbox: получить альтернативы =====
+// Делаем два запроса параллельно:
+//   1) driving-traffic + alternatives=true → фактические с учётом пробок (до 3)
+//   2) driving (без пробок) → "короткий/прямой" вариант
+// Потом дедуплицируем по схожести геометрии.
+async function getMapboxAlternatives(start, orderedPts){
+  if(!MAPBOX_TOKEN) return null;
+  const coords = [`${start.lon},${start.lat}`, ...orderedPts.map(p=>`${p.lon},${p.lat}`)].join(';');
+  const lang = currentLang === 'ua' ? 'uk' : 'ru';
+  const common = `geometries=geojson&overview=full&steps=true&annotations=congestion,distance&language=${lang}&access_token=${MAPBOX_TOKEN}`;
+  const urlTraffic = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coords}?alternatives=true&${common}`;
+  const urlPlain   = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?alternatives=true&${common}`;
+
+  try {
+    const [rT, rP] = await Promise.all([
+      fetch(urlTraffic).then(r=>r.json()).catch(()=>null),
+      fetch(urlPlain).then(r=>r.json()).catch(()=>null),
+    ]);
+    const all = [];
+    if(rT?.code === 'Ok') rT.routes.forEach(r => all.push({ src:'traffic', ...r }));
+    if(rP?.code === 'Ok') rP.routes.forEach(r => all.push({ src:'plain', ...r }));
+    if(!all.length){
+      console.warn('Mapbox directions returned no routes', rT, rP);
       return null;
     }
-    return data.routes.map((route, i) => {
-      let turns = 0, heavyMeters = 0, totalMeters = 0;
-      route.legs?.forEach(leg => {
-        leg.steps?.forEach(step => {
-          const m = step.maneuver?.type;
-          const mod = step.maneuver?.modifier || '';
-          if(m === 'turn' && /left|right/.test(mod)) turns++;
-          else if(['roundabout','rotary','exit roundabout','exit rotary','fork','merge','end of road'].includes(m)) turns++;
-        });
-        const cong = leg.annotation?.congestion || [];
-        const dists = leg.annotation?.distance || [];
-        cong.forEach((c, idx) => {
-          const d = dists[idx] || 0;
-          totalMeters += d;
-          if(c === 'heavy' || c === 'severe') heavyMeters += d;
-        });
-      });
+    // dedupe по сходству геометрии
+    const seen = new Set();
+    const unique = [];
+    for(const r of all){
+      const key = geometryKey({ ...r.geometry, distance: r.distance });
+      if(seen.has(key)) continue;
+      seen.add(key);
+      unique.push(r);
+      if(unique.length >= 4) break;
+    }
+    return unique.map((route, i) => {
+      const an = analyzeRoute(route);
       return {
         idx: i,
-        ordered: pts,
+        ordered: orderedPts,
         distance: route.distance,
         duration: route.duration,
         duration_typical: route.duration_typical || route.duration,
         delaySec: Math.max(0, route.duration - (route.duration_typical || route.duration)),
         geometry: route.geometry,
-        turns, heavyMeters, totalMeters,
+        legs: route.legs,
+        ...an,
       };
     });
   } catch(e) {
@@ -1083,8 +1192,21 @@ async function buildRoute(){
   }
   showLoader(t('building_route'));
   try{
-    // 1) Пробуем Mapbox driving-traffic с альтернативами
-    const raw = await getMapboxAlternatives(userPos, stops);
+    // 1) Оптимизируем порядок точек через Mapbox Optimization API (TSP)
+    let ordered = stops;
+    if(stops.length >= 2){
+      ordered = await optimizeOrderMapbox(userPos, stops);
+      // Если порядок изменился — отразим в локальном списке (ненавязчиво,
+      // пользователь увидит корректный порядок при возврате на экран списка).
+      if(ordered.length === stops.length && ordered.some((s,i)=>s.id!==stops[i].id)){
+        stops = ordered;
+        saveStops();
+        renderStops();
+      }
+    }
+
+    // 2) Альтернативы через Mapbox Directions (driving-traffic + driving)
+    const raw = await getMapboxAlternatives(userPos, ordered);
     if(raw?.length){
       routeVariants = classifyVariants(raw);
       selectedVariantIdx = 0;
@@ -1100,9 +1222,9 @@ async function buildRoute(){
       hapt('success');
       return;
     }
-    // 2) Fallback на OSRM
+    // 3) Fallback на OSRM (без Mapbox)
     routeVariants = null;
-    routeData = await optimizeRoute(userPos, stops);
+    routeData = await optimizeRoute(userPos, ordered);
     hideLoader();
     showScreen('map-screen');
     setTimeout(()=>renderMap(), 60);
@@ -1165,70 +1287,102 @@ document.getElementById('route-select-back').addEventListener('click', ()=>{
   hapt('light');
 });
 
-function mapboxBaseTiles(){
-  return L.tileLayer(
-    `https://api.mapbox.com/styles/v1/mapbox/navigation-night-v1/tiles/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`,
-    { tileSize:512, zoomOffset:-1, maxZoom:19,
-      attribution: '© <a href="https://www.mapbox.com/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OSM</a>' }
-  );
-}
-function mapboxTrafficTiles(){
-  return L.tileLayer(
-    `https://api.mapbox.com/v4/mapbox.mapbox-traffic-v1/{z}/{x}/{y}.png?access_token=${MAPBOX_TOKEN}`,
-    { maxZoom:18, opacity:0.85, attribution:'' }
-  );
+// ======================================================================
+//  MAPBOX GL JS — preview map (route overview)
+// ======================================================================
+function addRouteAndMarkersToMap(m, opts={}){
+  const withTraffic = opts.traffic !== false;
+
+  // Слой пробок поверх стиля Standard
+  m.addSource('mb-traffic', { type:'vector', url:'mapbox://mapbox.mapbox-traffic-v1' });
+  if(withTraffic){
+    m.addLayer({
+      id:'mb-traffic', type:'line', source:'mb-traffic', 'source-layer':'traffic',
+      minzoom: 6,
+      paint: {
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 16, 4],
+        'line-color': ['match', ['get','congestion'],
+          'low','#00c896','moderate','#ffaa55','heavy','#ff5673','severe','#cc0033','#00c896'],
+        'line-opacity': 0.75
+      }
+    });
+  }
+
+  // Линия маршрута
+  if(routeData.geometry){
+    m.addSource('route', { type:'geojson', data:{ type:'Feature', properties:{}, geometry: routeData.geometry }});
+    // подкладка-обводка для контраста на карте
+    m.addLayer({
+      id:'route-casing', type:'line', source:'route',
+      layout:{ 'line-join':'round', 'line-cap':'round' },
+      paint:{ 'line-color':'#0a0a10', 'line-width':10, 'line-opacity':0.85 }
+    });
+    m.addLayer({
+      id:'route', type:'line', source:'route',
+      layout:{ 'line-join':'round', 'line-cap':'round' },
+      paint:{ 'line-color':'#4f8cff', 'line-width':6, 'line-opacity':0.95 }
+    });
+  }
+
+  // Маркер пользователя (точка с пульсацией)
+  const userEl = document.createElement('div');
+  userEl.innerHTML = '<div class="pulse-marker"></div>';
+  new mapboxgl.Marker({ element: userEl }).setLngLat([userPos.lon, userPos.lat]).addTo(m);
+
+  // Маркеры остановок
+  routeData.ordered.forEach((s,i)=>{
+    const cls = i===routeData.ordered.length-1 ? 'end' : '';
+    const el = document.createElement('div');
+    el.className = `num-marker ${cls}`;
+    el.innerHTML = `<span>${i+1}</span>`;
+    new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+      .setLngLat([s.lon, s.lat])
+      .setPopup(new mapboxgl.Popup({offset:24, closeButton:false}).setText(`${i+1}. ${s.name}`))
+      .addTo(m);
+  });
+
+  // Fit bounds to route
+  const bounds = new mapboxgl.LngLatBounds();
+  bounds.extend([userPos.lon, userPos.lat]);
+  routeData.ordered.forEach(s => bounds.extend([s.lon, s.lat]));
+  if(routeData.geometry){
+    routeData.geometry.coordinates.forEach(c => bounds.extend(c));
+  }
+  m.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 0 });
 }
 
 function renderMap(){
-  const el = document.getElementById('map');
-  if(map){ map.remove(); map = null; }
-  map = L.map(el, { zoomControl:true, attributionControl:true }).setView([userPos.lat, userPos.lon], 13);
+  if(map){ try{ map.remove(); }catch(e){} map = null; }
+  map = new mapboxgl.Map({
+    container: 'map',
+    style: MAPBOX_STYLE,
+    center: [userPos.lon, userPos.lat],
+    zoom: 12,
+    pitch: 0,
+    bearing: 0,
+    antialias: true,
+    attributionControl: true,
+  });
+  map.addControl(new mapboxgl.NavigationControl({ showCompass:false }), 'top-right');
 
-  // Mapbox база + слой пробок
-  if(MAPBOX_TOKEN){
-    mapboxBaseTiles().addTo(map);
-    mapboxTrafficTiles().addTo(map);
-  } else {
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      { attribution:'© CARTO', subdomains:'abcd', maxZoom:19 }).addTo(map);
-  }
-
-  // Rest of map rendering (markers, polyline, etc.)
-  const km = (routeData.distance/1000).toFixed(1);
-  const min = Math.round(routeData.duration/60);
-  
-  // user
-  L.marker([userPos.lat, userPos.lon], {
-    icon: L.divIcon({ className:'', html:'<div class="pulse-marker"></div>', iconSize:[18,18], iconAnchor:[9,9] })
-  }).addTo(map);
-
-  // stops (нумерация)
-  const latlngs = [[userPos.lat, userPos.lon]];
-  routeData.ordered.forEach((s,i)=>{
-    const cls = i===routeData.ordered.length-1 ? 'end' : '';
-    L.marker([s.lat, s.lon], {
-      icon: L.divIcon({ className:'', html:`<div class="num-marker ${cls}"><span>${i+1}</span></div>`, iconSize:[32,32], iconAnchor:[16,32] })
-    }).bindTooltip(`${i+1}. ${s.name}`).addTo(map);
-    latlngs.push([s.lat, s.lon]);
+  map.on('style.load', () => {
+    try {
+      map.setConfigProperty('basemap', 'lightPreset', 'night');
+      map.setConfigProperty('basemap', 'show3dObjects', true);
+    } catch(e){ /* Standard style feature — ignore на старых версиях */ }
+    addRouteAndMarkersToMap(map, { traffic:true });
   });
 
-  // polyline
-  if(routeData.geometry){
-    L.geoJSON(routeData.geometry, { style:{ color:'#4f8cff', weight:5, opacity:.85 }}).addTo(map);
-  } else {
-    L.polyline(latlngs, { color:'#4f8cff', weight:5, opacity:.85, dashArray:'6 8' }).addTo(map);
-  }
-
-  map.fitBounds(L.latLngBounds(latlngs), { padding:[40,40] });
-
-  // route info panel
+  // Route info panel (как было)
+  const km = (routeData.distance/1000).toFixed(1);
+  const min = Math.round(routeData.duration/60);
   const info = document.getElementById('route-info');
   let html = `<div class="route-summary">
     <span>${t('route_summary')}:</span>
     <span class="chip">📏 ${km} ${t('km')}</span>
     <span class="chip">⏱ ~${min} ${t('min')}</span>
-  </div>`;
-  html += `<div class="route-step">
+  </div>
+  <div class="route-step">
     <span class="step-num start">🏁</span>
     <div class="step-body"><div class="step-title">${t('your_location')}</div></div>
   </div>`;
@@ -1371,46 +1525,156 @@ function startNavigation(){
 }
 
 function renderNavMap(){
-  const el = document.getElementById('map-nav');
-  if(mapNav){ mapNav.remove(); mapNav=null; }
-  mapNav = L.map(el, { zoomControl:false, attributionControl:false }).setView([userPos.lat, userPos.lon], 16);
-  if(MAPBOX_TOKEN){
-    mapboxBaseTiles().addTo(mapNav);
-    mapboxTrafficTiles().addTo(mapNav);
-  } else {
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      { subdomains:'abcd', maxZoom:19 }).addTo(mapNav);
-  }
+  if(mapNav){ try{ mapNav.remove(); }catch(e){} mapNav = null; }
 
-  userMarker = L.marker([userPos.lat, userPos.lon], {
-    icon: L.divIcon({ className:'', html:'<div class="user-arrow" id="user-arrow"></div>', iconSize:[34,34], iconAnchor:[17,17] })
-  }).addTo(mapNav);
+  // Собираем плоский список шагов для turn-by-turn
+  navSteps = [];
+  routeData.legs?.forEach(leg => { leg.steps?.forEach(s => navSteps.push(s)); });
+  currentStepIdx = 0;
 
-  // линии маршрута
-  if(routeData.geometry){
-    L.geoJSON(routeData.geometry, { style:{ color:'#4f8cff', weight:5, opacity:.85 }}).addTo(mapNav);
-  }
-
-  // маркеры остановок
-  stopMarkers = [];
-  routeData.ordered.forEach((s,i)=>{
-    const m = L.marker([s.lat, s.lon], {
-      icon: L.divIcon({ className:'', html:`<div class="num-marker"><span>${i+1}</span></div>`, iconSize:[32,32], iconAnchor:[16,32] })
-    }).addTo(mapNav);
-    stopMarkers.push(m);
+  mapNav = new mapboxgl.Map({
+    container: 'map-nav',
+    style: MAPBOX_STYLE,
+    center: [userPos.lon, userPos.lat],
+    zoom: 17,
+    pitch: 60,
+    bearing: currentHeading,
+    antialias: true,
+    attributionControl: false,
+    interactive: true, // пользователь может разблокировать и крутить
   });
 
-  updateHud();
-  updateMainButton('nav-screen');
+  mapNav.on('style.load', () => {
+    try {
+      mapNav.setConfigProperty('basemap', 'lightPreset', 'night');
+      mapNav.setConfigProperty('basemap', 'show3dObjects', true);
+    } catch(e){}
 
-  // компенсация для поворота карты — увеличиваем контейнер
-  const rot = document.getElementById('map-rotator');
-  const nav = document.getElementById('map-nav');
-  nav.style.width = '160%';
-  nav.style.height = '160%';
-  nav.style.marginLeft = '-30%';
-  nav.style.marginTop = '-30%';
-  setTimeout(()=>mapNav.invalidateSize(), 120);
+    // Пробки поверх
+    mapNav.addSource('mb-traffic-nav', { type:'vector', url:'mapbox://mapbox.mapbox-traffic-v1' });
+    mapNav.addLayer({
+      id:'mb-traffic-nav', type:'line', source:'mb-traffic-nav', 'source-layer':'traffic',
+      minzoom: 6,
+      paint: {
+        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 16, 5],
+        'line-color': ['match', ['get','congestion'],
+          'low','#00c896','moderate','#ffaa55','heavy','#ff5673','severe','#cc0033','#00c896'],
+        'line-opacity': 0.8
+      }
+    });
+
+    // Маршрут
+    if(routeData.geometry){
+      mapNav.addSource('route', { type:'geojson', data:{ type:'Feature', properties:{}, geometry: routeData.geometry }});
+      mapNav.addLayer({
+        id:'route-casing', type:'line', source:'route',
+        layout:{ 'line-join':'round','line-cap':'round' },
+        paint:{ 'line-color':'#0a0a10', 'line-width':12, 'line-opacity':0.85 }
+      });
+      mapNav.addLayer({
+        id:'route', type:'line', source:'route',
+        layout:{ 'line-join':'round','line-cap':'round' },
+        paint:{ 'line-color':'#4f8cff', 'line-width':8, 'line-opacity':0.95 }
+      });
+    }
+
+    // Маркеры остановок
+    stopMarkers = [];
+    routeData.ordered.forEach((s,i)=>{
+      const el = document.createElement('div');
+      el.className = 'num-marker';
+      el.innerHTML = `<span>${i+1}</span>`;
+      const mk = new mapboxgl.Marker({ element: el, anchor:'bottom' })
+        .setLngLat([s.lon, s.lat]).addTo(mapNav);
+      stopMarkers.push({ mk, el });
+    });
+
+    // Стрелка пользователя
+    const arrowEl = document.createElement('div');
+    arrowEl.className = 'user-arrow';
+    userMarker = new mapboxgl.Marker({ element: arrowEl, rotationAlignment:'map' })
+      .setLngLat([userPos.lon, userPos.lat]).addTo(mapNav);
+    userMarker.setRotation(currentHeading);
+
+    updateHud();
+    updateManeuverBanner();
+    updateNavCamera(true);
+  });
+
+  // Если пользователь сам крутанул карту — выключаем lock
+  mapNav.on('dragstart', ()=>{ if(cameraLocked){ cameraLocked=false; refreshLockBtn(); }});
+  mapNav.on('rotatestart', ()=>{ if(cameraLocked){ cameraLocked=false; refreshLockBtn(); }});
+  mapNav.on('pitchstart',  ()=>{ /* pitch разрешаем без выключения lock */ });
+
+  updateMainButton('nav-screen');
+}
+
+function refreshLockBtn(){
+  const b = document.getElementById('lock-btn');
+  if(!b) return;
+  b.classList.toggle('locked', cameraLocked);
+  b.textContent = cameraLocked ? '🔒' : '🧭';
+  b.title = cameraLocked ? 'Разблокировать карту' : 'Привязать к движению';
+}
+
+function updateNavCamera(immediate=false){
+  if(!mapNav || !cameraLocked || !userPos) return;
+  const now = Date.now();
+  if(!immediate && now - lastCamUpdate < 300) return; // троттлинг
+  lastCamUpdate = now;
+  mapNav.easeTo({
+    center: [userPos.lon, userPos.lat],
+    bearing: currentHeading,
+    pitch: 60,
+    zoom: 17,
+    duration: immediate ? 0 : 700,
+    essential: true,
+  });
+}
+
+// ---- Turn-by-turn ----
+const MANEUVER_ARROWS = {
+  'turn-left':'↰','turn-right':'↱','turn-sharp left':'⬅','turn-sharp right':'➡',
+  'turn-slight left':'↖','turn-slight right':'↗','turn-straight':'↑',
+  'depart':'🏁','arrive':'🏁',
+  'merge':'⇗','on ramp':'⇗','off ramp':'⇘','fork':'⇈','continue':'↑',
+  'roundabout':'⟳','rotary':'⟳','exit roundabout':'⟳','exit rotary':'⟳','end of road':'↰','use lane':'↑',
+};
+function maneuverArrow(step){
+  const m = step.maneuver || {};
+  const key = (m.type + (m.modifier ? '-' + m.modifier : '')).trim();
+  return MANEUVER_ARROWS[key] || MANEUVER_ARROWS[m.type] || '↑';
+}
+
+function advanceStepIfNeeded(){
+  if(!navSteps.length) return;
+  // если мы ближе 25м к КОНЦУ текущего шага — переходим к следующему
+  const step = navSteps[currentStepIdx];
+  if(!step) return;
+  const coords = step.geometry?.coordinates;
+  if(!coords?.length) return;
+  const end = coords[coords.length-1];
+  const d = haversine(userPos.lat, userPos.lon, end[1], end[0]) * 1000;
+  if(d < 25 && currentStepIdx < navSteps.length-1){
+    currentStepIdx++;
+  }
+}
+
+function updateManeuverBanner(){
+  const iconEl = document.getElementById('maneuver-icon');
+  const distEl = document.getElementById('maneuver-distance');
+  const textEl = document.getElementById('maneuver-text');
+  if(!iconEl || !distEl || !textEl) return;
+  if(!navSteps.length){ distEl.textContent='—'; textEl.textContent='—'; iconEl.textContent='↑'; return; }
+  advanceStepIfNeeded();
+  const step = navSteps[currentStepIdx];
+  if(!step){ iconEl.textContent='🏁'; distEl.textContent='—'; textEl.textContent='—'; return; }
+  iconEl.textContent = maneuverArrow(step);
+  const end = step.geometry?.coordinates?.slice(-1)[0];
+  let dM = 0;
+  if(end) dM = haversine(userPos.lat, userPos.lon, end[1], end[0]) * 1000;
+  distEl.textContent = dM > 1000 ? (dM/1000).toFixed(1)+' '+t('km') : Math.round(dM)+' м';
+  textEl.textContent = step.maneuver?.instruction || step.name || '—';
 }
 
 function updateHud(){
@@ -1429,9 +1693,10 @@ function updateHud(){
 }
 
 function markMarkerDone(index){
-  const m = stopMarkers[index];
-  if(!m) return;
-  m.setIcon(L.divIcon({ className:'', html:`<div class="num-marker done"><span>${index+1}</span></div>`, iconSize:[32,32], iconAnchor:[16,32] }));
+  const sm = stopMarkers[index];
+  if(!sm) return;
+  sm.el.classList.add('done');
+  sm.el.innerHTML = `<span>${index+1}</span>`;
 }
 
 document.getElementById('delivered-btn').addEventListener('click', markDelivered);
@@ -1475,19 +1740,31 @@ function stopNavigation(){
 
 /* ---- heading-up ---- */
 function onOrient(e){
-  let alpha = e.alpha;
-  if(e.webkitCompassHeading !== undefined) alpha = 360 - e.webkitCompassHeading; // iOS
-  if(alpha==null) return;
-  currentHeading = alpha;
+  let heading = null;
+  if(typeof e.webkitCompassHeading === 'number') {
+    // iOS Safari: webkitCompassHeading — уже истинный курс (0 = север)
+    heading = e.webkitCompassHeading;
+  } else if(typeof e.alpha === 'number') {
+    // Android/Chrome: alpha — от магнитного N против часовой; absolute: 0 = север
+    heading = 360 - e.alpha;
+  }
+  if(heading == null || isNaN(heading)) return;
+  currentHeading = (heading + 360) % 360;
   applyRotation();
 }
 
 function applyRotation(){
-  const rot = document.getElementById('map-rotator');
-  rot.style.transform = `rotate(${-currentHeading}deg)`;
-  const arrow = document.getElementById('user-arrow');
-  if(arrow) arrow.style.transform = `rotate(${currentHeading}deg)`;
+  if(userMarker) userMarker.setRotation(currentHeading);
+  if(cameraLocked) updateNavCamera();
 }
+
+// Lock / unlock heading-up
+document.getElementById('lock-btn').addEventListener('click', () => {
+  cameraLocked = !cameraLocked;
+  refreshLockBtn();
+  if(cameraLocked) updateNavCamera(true);
+  hapt(cameraLocked ? 'success' : 'light');
+});
 
 function bearing(lat1,lon1,lat2,lon2){
   const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180, Δλ=(lon2-lon1)*Math.PI/180;
@@ -1517,21 +1794,23 @@ function startWatch(){
     if(last){
       const d = haversine(last.lat,last.lon,np.lat,np.lon);
       travelledKm += d;
-      // если heading от компаса недоступен, считаем из движения
+      // если компас недоступен — считаем heading из движения
       if(d > 0.003){ // >3 м
         const b = bearing(last.lat,last.lon,np.lat,np.lon);
-        // используем только если компаса нет (currentHeading не обновляется событиями — оставим как есть)
-        if(!('ondeviceorientationabsolute' in window)) {
+        if(!('ondeviceorientationabsolute' in window)){
           currentHeading = b;
-          applyRotation();
         }
       }
     }
     last = np;
     userPos = np;
-    if(userMarker){ userMarker.setLatLng([np.lat, np.lon]); }
-    if(mapNav){ mapNav.panTo([np.lat, np.lon], { animate:true, duration:.6 }); }
+    if(userMarker){
+      userMarker.setLngLat([np.lon, np.lat]);
+      userMarker.setRotation(currentHeading);
+    }
+    if(cameraLocked) updateNavCamera();
     updateHud();
+    updateManeuverBanner();
   }, err=>{
     console.warn('watch err', err);
   }, { enableHighAccuracy:true, maximumAge:2000, timeout:15000 });
