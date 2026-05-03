@@ -1364,6 +1364,7 @@ function renderMap(){
     zoom: 12,
     pitch: 0,
     bearing: 0,
+    maxPitch: 75,
     antialias: true,
     attributionControl: true,
   });
@@ -1371,7 +1372,8 @@ function renderMap(){
 
   map.on('style.load', () => {
     try {
-      map.setConfigProperty('basemap', 'lightPreset', 'night');
+      // 'day' — яркий дневной свет как в Apple Maps; 3D-здания хорошо видны.
+      map.setConfigProperty('basemap', 'lightPreset', 'day');
       map.setConfigProperty('basemap', 'show3dObjects', true);
     } catch(e){ /* Standard style feature — ignore на старых версиях */ }
     addRouteAndMarkersToMap(map, { traffic:true });
@@ -1585,17 +1587,18 @@ function renderNavMap(){
     container: 'map-nav',
     style: MAPBOX_STYLE,
     center: [userPos.lon, userPos.lat],
-    zoom: 17,
-    pitch: 60,
+    zoom: 17.5,
+    pitch: 65,
     bearing: currentHeading,
+    maxPitch: 75,
     antialias: true,
     attributionControl: false,
-    interactive: true, // пользователь может разблокировать и крутить
+    interactive: true,
   });
 
   mapNav.on('style.load', () => {
     try {
-      mapNav.setConfigProperty('basemap', 'lightPreset', 'night');
+      mapNav.setConfigProperty('basemap', 'lightPreset', 'day');
       mapNav.setConfigProperty('basemap', 'show3dObjects', true);
     } catch(e){}
 
@@ -1681,8 +1684,8 @@ function updateNavCamera(immediate=false){
   mapNav.easeTo({
     center: [userPos.lon, userPos.lat],
     bearing: currentHeading,
-    pitch: 60,
-    zoom: 17,
+    pitch: 65,
+    zoom: 17.5,
     duration: immediate ? 0 : 700,
     essential: true,
   });
