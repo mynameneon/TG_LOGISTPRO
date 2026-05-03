@@ -218,6 +218,37 @@
     transition:transform .35s cubic-bezier(.2,.7,.3,1);box-shadow:0 10px 30px rgba(0,0,0,.5)}
   .toast.show{transform:translate(-50%,0)}
 
+  /* ------- ROUTE VARIANTS ------- */
+  .variant-card{background:var(--card);border-radius:14px;margin-bottom:12px;
+    border:1px solid var(--border);overflow:hidden;cursor:pointer;
+    animation:slideInUp .3s ease both;transition:transform .15s, border-color .2s, box-shadow .2s}
+  .variant-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(79,140,255,.25)}
+  .variant-card:active{transform:scale(.985)}
+  .variant-thumb{width:100%;height:140px;background:#0a0a10;display:block;object-fit:cover}
+  .variant-body{padding:12px 14px}
+  .variant-tag{display:inline-block;font-size:11px;padding:4px 10px;border-radius:6px;
+    background:var(--card2);color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .variant-tag.fastest{color:#ffaa55;background:rgba(255,170,85,.14)}
+  .variant-tag.shortest{color:#4f8cff;background:rgba(79,140,255,.14)}
+  .variant-tag.calm{color:#c89bff;background:rgba(200,155,255,.14)}
+  .variant-tag.green{color:#00c896;background:rgba(0,200,150,.14)}
+  .variant-tag.balanced{color:#7a7a9a;background:var(--card2)}
+  .variant-stats{display:flex;gap:14px;margin-top:8px;color:var(--muted);font-size:13px;flex-wrap:wrap}
+  .variant-stats b{color:var(--text);font-weight:600}
+  .variant-stats .jam{color:#ff5673}
+  .variant-desc{color:var(--muted);font-size:12.5px;margin-top:6px;line-height:1.4}
+
+  /* ------- NAV SHEET (open in external app) ------- */
+  .nav-options{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+  .nav-option{display:flex;align-items:center;gap:14px;background:var(--card2);
+    border-radius:12px;padding:12px 14px;cursor:pointer;transition:transform .15s, background .2s}
+  .nav-option:active{transform:scale(.98);background:var(--card)}
+  .nav-ico{font-size:22px;width:42px;height:42px;display:flex;
+    align-items:center;justify-content:center;border-radius:10px;background:var(--card);color:#fff;font-weight:800;letter-spacing:.5px}
+  .nav-name{font-weight:600;font-size:15px}
+  .nav-sub{color:var(--muted);font-size:12px;margin-top:2px}
+  .nav-arrow{color:var(--muted);font-size:22px;line-height:1}
+
   /* ------- ANIMATIONS ------- */
   @keyframes slideInUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
   @keyframes fadeOut{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(.85);max-height:0;margin:0;padding:0}}
@@ -266,7 +297,10 @@
   <div class="header">
     <button class="icon-btn" id="map-back">←</button>
     <h1 data-i18n="route_screen">🗺 Маршрут</h1>
-    <button class="icon-btn" id="rebuild-btn" title="Перестроить">⟳</button>
+    <div style="display:flex;gap:6px">
+      <button class="icon-btn" id="open-ext-nav" title="Открыть в навигаторе">📲</button>
+      <button class="icon-btn" id="rebuild-btn" title="Перестроить">⟳</button>
+    </div>
   </div>
   <div class="map-wrap"><div id="map"></div></div>
   <div class="route-info" id="route-info"></div>
@@ -281,6 +315,8 @@
     <div class="map-rotator" id="map-rotator"><div id="map-nav"></div></div>
     <div class="hud" id="hud"></div>
     <button class="nav-back" id="nav-back" data-i18n="back_to_list">↩ Список</button>
+    <button class="icon-btn" id="open-ext-nav-2" title="Открыть в навигаторе"
+      style="position:absolute;top:calc(14px + env(safe-area-inset-top));left:12px;z-index:501;background:rgba(26,26,36,.92);backdrop-filter:blur(10px);border:1px solid var(--border)">📲</button>
     <div class="nav-bottom">
       <button class="btn btn-success" id="delivered-btn" data-i18n="delivered">✅ Доставлено</button>
       <button class="btn btn-danger" id="skip-btn" data-i18n="cancel">❌ Отмена</button>
@@ -325,6 +361,17 @@
   <div class="sheet-actions">
     <button class="btn btn-secondary" id="sheet-cancel" data-i18n="cancel_btn">Отмена</button>
     <button class="btn btn-primary" id="sheet-save" data-i18n="add">✅ Добавить</button>
+  </div>
+</div>
+
+<!-- ============ NAV SHEET (external app) ============ -->
+<div class="overlay" id="overlay-nav"></div>
+<div class="sheet" id="navsheet">
+  <div class="sheet-handle"></div>
+  <h2 data-i18n="open_in_nav">📲 Открыть в навигаторе</h2>
+  <div class="nav-options" id="nav-options-list"></div>
+  <div class="sheet-actions" style="margin-top:14px">
+    <button class="btn btn-secondary" id="navsheet-cancel" data-i18n="cancel_btn">Отмена</button>
   </div>
 </div>
 
@@ -407,6 +454,22 @@ const I18N = {
     delete_confirm:"Удалить точку?",
     all_done:"Все точки выполнены! 🎉",
     skip_current:"Пропустить эту точку?",
+    open_in_nav:"📲 Открыть в навигаторе",
+    nav_app_subtitle:"Со всеми точками маршрута",
+    waze_one_point:"Только до последней точки",
+    variant_fastest:"⚡ Быстрый",
+    variant_fastest_desc:"Самый быстрый по времени с учётом пробок",
+    variant_shortest:"📏 Короткий",
+    variant_shortest_desc:"Меньше километров в пути",
+    variant_calm:"🛣 Меньше поворотов",
+    variant_calm_desc:"Побольше прямых участков, меньше манёвров",
+    variant_green:"🟢 Без пробок",
+    variant_green_desc:"Объезжаем заторы и ДТП",
+    variant_balanced:"⚖ Баланс",
+    variant_balanced_desc:"Средний между временем, расстоянием и пробками",
+    turns:"поворотов",
+    traffic_jam:"пробка",
+    choose_variant_hint:"Выберите подходящий маршрут",
   },
   ua: {
     app_name:"Логіст",
@@ -452,6 +515,22 @@ const I18N = {
     delete_confirm:"Видалити точку?",
     all_done:"Усі точки виконано! 🎉",
     skip_current:"Пропустити цю точку?",
+    open_in_nav:"📲 Відкрити в навігаторі",
+    nav_app_subtitle:"З усіма точками маршруту",
+    waze_one_point:"Тільки до останньої точки",
+    variant_fastest:"⚡ Швидкий",
+    variant_fastest_desc:"Найшвидший за часом з урахуванням заторів",
+    variant_shortest:"📏 Короткий",
+    variant_shortest_desc:"Менше кілометрів у дорозі",
+    variant_calm:"🛣 Менше поворотів",
+    variant_calm_desc:"Більше прямих ділянок, менше маневрів",
+    variant_green:"🟢 Без заторів",
+    variant_green_desc:"Об'їжджаємо затори та ДТП",
+    variant_balanced:"⚖ Баланс",
+    variant_balanced_desc:"Середнє між часом, відстанню та заторами",
+    turns:"поворотів",
+    traffic_jam:"затор",
+    choose_variant_hint:"Оберіть зручний маршрут",
   }
 };
 let currentLang = localStorage.getItem('lang') || (tg?.initDataUnsafe?.user?.language_code === 'uk' ? 'ua' : 'ru');
@@ -850,31 +929,105 @@ function nearestNeighborOrder(start, pts){
   return order;
 }
 
-// Mapbox alternative routes (requires token; falls back to OSRM)
-async function getAlternativeRoutesMapbox(start, pts){
-  if(!MAPBOX_TOKEN){
-    console.warn('No Mapbox token; using OSRM single route');
-    return null; // fallback in optimizeRoute()
-  }
-  try{
-    const coords = [`${start.lon},${start.lat}`, ...pts.map(p=>`${p.lon},${p.lat}`)].join(';');
-    const url = `${MAPBOX_DIRECTIONS}/${coords}?access_token=${MAPBOX_TOKEN}&geometries=geojson&overview=full&alternatives=true&steps=false`;
+// ===== Mapbox: alternative routes via driving-traffic with congestion analysis =====
+async function getMapboxAlternatives(start, pts){
+  if(!MAPBOX_TOKEN) return null;
+  const coords = [`${start.lon},${start.lat}`, ...pts.map(p=>`${p.lon},${p.lat}`)].join(';');
+  const lang = currentLang === 'ua' ? 'uk' : 'ru';
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coords}` +
+    `?alternatives=true&geometries=geojson&overview=full&steps=true` +
+    `&annotations=congestion,distance&language=${lang}&access_token=${MAPBOX_TOKEN}`;
+  try {
     const r = await fetch(url);
     const data = await r.json();
-    if(data.code !== 'Ok' || !data.routes) throw new Error('Mapbox fail');
-    
-    // Return top 3 routes as alternatives
-    return data.routes.slice(0, 3).map((route, idx)=>({ 
-      variant: idx + 1,
-      ordered: pts, // simplified; actual order from OSRM trip
-      distance: route.distance,
-      duration: route.duration,
-      geometry: route.geometry,
-    }));
-  }catch(e){
-    console.warn('Mapbox alternative routes failed:', e);
+    if(data.code !== 'Ok' || !data.routes?.length) {
+      console.warn('Mapbox directions failed:', data);
+      return null;
+    }
+    return data.routes.map((route, i) => {
+      let turns = 0, heavyMeters = 0, totalMeters = 0;
+      route.legs?.forEach(leg => {
+        leg.steps?.forEach(step => {
+          const m = step.maneuver?.type;
+          const mod = step.maneuver?.modifier || '';
+          if(m === 'turn' && /left|right/.test(mod)) turns++;
+          else if(['roundabout','rotary','exit roundabout','exit rotary','fork','merge','end of road'].includes(m)) turns++;
+        });
+        const cong = leg.annotation?.congestion || [];
+        const dists = leg.annotation?.distance || [];
+        cong.forEach((c, idx) => {
+          const d = dists[idx] || 0;
+          totalMeters += d;
+          if(c === 'heavy' || c === 'severe') heavyMeters += d;
+        });
+      });
+      return {
+        idx: i,
+        ordered: pts,
+        distance: route.distance,
+        duration: route.duration,
+        duration_typical: route.duration_typical || route.duration,
+        delaySec: Math.max(0, route.duration - (route.duration_typical || route.duration)),
+        geometry: route.geometry,
+        turns, heavyMeters, totalMeters,
+      };
+    });
+  } catch(e) {
+    console.error('Mapbox directions error:', e);
     return null;
   }
+}
+
+// Категоризация: каждому варианту присваиваем тег по тому, в чём он лучший
+function classifyVariants(variants){
+  if(!variants?.length) return [];
+  const byMin = (key) => [...variants].sort((a,b)=>a[key]-b[key])[0].idx;
+  const winner = {
+    fastest:  byMin('duration'),
+    shortest: byMin('distance'),
+    calm:     byMin('turns'),
+    green:    byMin('heavyMeters'),
+  };
+  // Если кто-то выиграл по нескольким — оставляем приоритет: fastest > green > calm > shortest
+  const used = new Set();
+  const order = ['fastest','green','calm','shortest'];
+  const tagByIdx = {};
+  for(const cat of order){
+    const idx = winner[cat];
+    if(!used.has(idx)){
+      tagByIdx[idx] = cat;
+      used.add(idx);
+    }
+  }
+  return variants.map(v => ({ ...v, tag: tagByIdx[v.idx] || 'balanced' }));
+}
+
+// URL превью карточки варианта через Mapbox Static Images API
+function simplifyCoords(coords, max){
+  if(coords.length <= max) return coords;
+  const step = Math.ceil(coords.length / max);
+  const out = [];
+  for(let i=0; i<coords.length; i+=step) out.push(coords[i]);
+  if(out[out.length-1] !== coords[coords.length-1]) out.push(coords[coords.length-1]);
+  return out;
+}
+function variantPreviewUrl(variant, w=600, h=210){
+  const coords = simplifyCoords(variant.geometry.coordinates, 70);
+  const colors = { fastest:'ffaa55', shortest:'4f8cff', calm:'c89bff', green:'00c896', balanced:'7a7a9a' };
+  const stroke = colors[variant.tag] || '4f8cff';
+  const geo = {
+    type:'Feature',
+    properties:{ stroke:'#'+stroke, 'stroke-width':5, 'stroke-opacity':0.9 },
+    geometry:{ type:'LineString', coordinates: coords }
+  };
+  // старт и финиш как pin
+  const startC = coords[0], endC = coords[coords.length-1];
+  const overlays = [
+    `geojson(${encodeURIComponent(JSON.stringify(geo))})`,
+    `pin-s-a+00c896(${startC[0]},${startC[1]})`,
+    `pin-s-b+ff5673(${endC[0]},${endC[1]})`,
+  ].join(',');
+  return `https://api.mapbox.com/styles/v1/mapbox/navigation-night-v1/static/${overlays}/auto/${w}x${h}@2x?access_token=${MAPBOX_TOKEN}`;
 }
 
 async function optimizeRoute(start, pts){
@@ -925,91 +1078,86 @@ async function buildRoute(){
   try{
     userPos = await getPosition();
   }catch(e){
-    hideLoader();
     toast(t('location_error'));
     userPos = { lat: KYIV_CENTER[0], lon: KYIV_CENTER[1] };
   }
   showLoader(t('building_route'));
   try{
-    // Fetch main route
-    routeData = await optimizeRoute(userPos, stops);
-    
-    // Fetch alternative routes from Mapbox (if token available)
-    routeVariants = null;
-    if(MAPBOX_TOKEN){
-      showLoader(t('building_route') + ' (альтернативы...)');
-      const variants = await getAlternativeRoutesMapbox(userPos, stops);
-      if(variants && variants.length > 1){
-        // Use Mapbox variants as options
-        routeVariants = variants.map((v, i)=>({
-          variant: i + 1,
-          ordered: stops, // Keep original order; Mapbox handles routing
-          distance: v.distance,
-          duration: v.duration,
-          geometry: v.geometry,
-        }));
-      }
-    }
-    
-    // If we have alternatives, show selection screen; otherwise go straight to map
-    if(routeVariants && routeVariants.length > 1){
-      hideLoader();
-      showScreen('route-select-screen');
-      renderRouteVariants();
-    } else {
-      // Use main route
-      hideLoader();
+    // 1) Пробуем Mapbox driving-traffic с альтернативами
+    const raw = await getMapboxAlternatives(userPos, stops);
+    if(raw?.length){
+      routeVariants = classifyVariants(raw);
       selectedVariantIdx = 0;
-      showScreen('map-screen');
-      setTimeout(()=>renderMap(), 60);
+      routeData = routeVariants[0];
+      hideLoader();
+      if(routeVariants.length > 1){
+        showScreen('route-select-screen');
+        renderRouteVariants();
+      } else {
+        showScreen('map-screen');
+        setTimeout(()=>renderMap(), 60);
+      }
+      hapt('success');
+      return;
     }
+    // 2) Fallback на OSRM
+    routeVariants = null;
+    routeData = await optimizeRoute(userPos, stops);
+    hideLoader();
+    showScreen('map-screen');
+    setTimeout(()=>renderMap(), 60);
     hapt('success');
   }catch(e){
     hideLoader();
     console.error('Route build error:', e);
     toast('Ошибка построения маршрута');
-    return;
   }
 }
 
 function renderRouteVariants(){
   const container = document.getElementById('route-variants');
   container.innerHTML = '';
-  if(!routeVariants || routeVariants.length === 0) return;
-  
-  routeVariants.forEach((variant, idx)=>{
+  if(!routeVariants?.length) return;
+
+  // подсказка вверху
+  const intro = document.createElement('div');
+  intro.style.cssText = 'padding:0 4px 14px;color:var(--muted);font-size:13px;text-align:center';
+  intro.textContent = t('choose_variant_hint');
+  container.appendChild(intro);
+
+  routeVariants.forEach((v, idx) => {
     const card = document.createElement('div');
-    card.className = 'stop-card';
-    const isSelected = idx === selectedVariantIdx;
-    card.style.borderLeft = isSelected ? '4px solid #4f8cff' : '4px solid transparent';
+    card.className = 'variant-card' + (idx===selectedVariantIdx ? ' selected' : '');
+    const km = (v.distance/1000).toFixed(1);
+    const min = Math.round(v.duration/60);
+    const heavyKm = (v.heavyMeters/1000).toFixed(1);
+    const tagLabel = t('variant_' + v.tag);
+    const tagDesc  = t('variant_' + v.tag + '_desc');
+    const showJam  = v.heavyMeters > 200;
+
     card.innerHTML = `
-      <div class="stop-top">
-        <div class="stop-name">
-          <span class="stop-badge" style="background:${isSelected ? '#4f8cff' : '#7a7a9a'}">🗺 ${variant.variant}</span>
-          <span>${(variant.distance/1000).toFixed(1)} ${t('km')}</span>
+      <img class="variant-thumb" src="${variantPreviewUrl(v)}" loading="lazy" alt=""
+           onerror="this.style.display='none'" />
+      <div class="variant-body">
+        <span class="variant-tag ${v.tag}">${tagLabel}</span>
+        <div class="variant-desc">${tagDesc}</div>
+        <div class="variant-stats">
+          <span>📏 <b>${km}</b> ${t('km')}</span>
+          <span>⏱ <b>${min}</b> ${t('min')}</span>
+          <span>↩ <b>${v.turns}</b> ${t('turns')}</span>
+          ${showJam ? `<span class="jam">🚦 <b>${heavyKm}</b> ${t('km')} ${t('traffic_jam')}</span>` : ''}
         </div>
       </div>
-      <div class="stop-addr">⏱ ~${Math.round(variant.duration/60)} ${t('min')}</div>
     `;
-    card.style.cursor = 'pointer';
-    card.addEventListener('click', ()=>{
+    card.addEventListener('click', () => {
       selectedVariantIdx = idx;
-      routeData = variant;
-      renderRouteVariants(); // Re-render to show selection
-      setTimeout(()=>{
-        showScreen('map-screen');
-        renderMap();
-      }, 300);
+      routeData = routeVariants[idx];
       hapt('light');
+      renderRouteVariants();
+      setTimeout(() => { showScreen('map-screen'); renderMap(); }, 220);
     });
     container.appendChild(card);
   });
-  
-  // Add info text
-  const info = document.createElement('div');
-  info.className = 'empty';
-  info.innerHTML = `<p style="color:var(--muted); font-size:13px; margin-top:14px; text-align:center;">📍 Нажми на маршрут, чтобы эго ыбрать</p>`;
-  container.appendChild(info);
 }
 
 document.getElementById('route-select-back').addEventListener('click', ()=>{
@@ -1017,32 +1165,32 @@ document.getElementById('route-select-back').addEventListener('click', ()=>{
   hapt('light');
 });
 
+function mapboxBaseTiles(){
+  return L.tileLayer(
+    `https://api.mapbox.com/styles/v1/mapbox/navigation-night-v1/tiles/{z}/{x}/{y}@2x?access_token=${MAPBOX_TOKEN}`,
+    { tileSize:512, zoomOffset:-1, maxZoom:19,
+      attribution: '© <a href="https://www.mapbox.com/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OSM</a>' }
+  );
+}
+function mapboxTrafficTiles(){
+  return L.tileLayer(
+    `https://api.mapbox.com/v4/mapbox.mapbox-traffic-v1/{z}/{x}/{y}.png?access_token=${MAPBOX_TOKEN}`,
+    { maxZoom:18, opacity:0.85, attribution:'' }
+  );
+}
+
 function renderMap(){
   const el = document.getElementById('map');
   if(map){ map.remove(); map = null; }
   map = L.map(el, { zoomControl:true, attributionControl:true }).setView([userPos.lat, userPos.lon], 13);
-  
-  // Add map layers
-  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Esri, Maxar, Earthstar Geographics', maxZoom:19, name: 'Satellite'
-  });
-  const streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '© CARTO', subdomains:'abcd', maxZoom:19, name: 'Street'
-  });
-  satelliteLayer.addTo(map);
-  
-  // Add Mapbox Traffic layer (if token available)
+
+  // Mapbox база + слой пробок
   if(MAPBOX_TOKEN){
-    const trafficLayer = L.tileLayer(
-      `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/0,0,0,0/600x400?access_token=${MAPBOX_TOKEN}`,
-      { attribution: '© Mapbox', maxZoom:19, opacity: 0.3, name: 'Traffic' }
-    );
-    // Alternative: use Mapbox raster tiles with traffic overlay
-    const trafficTiles = L.tileLayer(
-      `https://api.mapbox.com/v4/mapbox.mapbox-traffic-v1/{z}/{x}/{y}.png?access_token=${MAPBOX_TOKEN}`,
-      { attribution: '© Mapbox', maxZoom:18, opacity: 0.5, name: 'Traffic Overlay' }
-    );
-    trafficTiles.addTo(map);
+    mapboxBaseTiles().addTo(map);
+    mapboxTrafficTiles().addTo(map);
+  } else {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      { attribution:'© CARTO', subdomains:'abcd', maxZoom:19 }).addTo(map);
   }
 
   // Rest of map rendering (markers, polyline, etc.)
@@ -1108,6 +1256,89 @@ document.getElementById('map-back').addEventListener('click', ()=>{ showScreen('
 document.getElementById('rebuild-btn').addEventListener('click', ()=>buildRoute());
 
 /* ======================================================================
+   OPEN IN EXTERNAL NAVIGATOR (Google / Waze / Apple / 2GIS)
+====================================================================== */
+function openExternalNavigator(){
+  if(!routeData?.ordered?.length){ toast('Нет маршрута'); return; }
+  const list = document.getElementById('nav-options-list');
+  const stopsList = routeData.ordered;
+  const dest = stopsList[stopsList.length - 1];
+  const waypoints = stopsList.slice(0, -1);
+
+  const opts = [
+    {
+      ico:'G', bg:'#1a73e8', name:'Google Maps', sub: t('nav_app_subtitle'),
+      url: () => {
+        const params = new URLSearchParams({
+          api:'1', travelmode:'driving',
+          destination: `${dest.lat},${dest.lon}`,
+          origin: userPos ? `${userPos.lat},${userPos.lon}` : '',
+        });
+        const wp = waypoints.map(s=>`${s.lat},${s.lon}`).join('|');
+        if(wp) params.set('waypoints', wp);
+        return `https://www.google.com/maps/dir/?${params}`;
+      }
+    },
+    {
+      ico:'W', bg:'#33ccff', name:'Waze', sub: t('waze_one_point'),
+      url: () => `https://waze.com/ul?ll=${dest.lat}%2C${dest.lon}&navigate=yes`
+    },
+    {
+      ico:'A', bg:'#ffffff22', name:'Apple Maps', sub: t('nav_app_subtitle'),
+      url: () => {
+        const parts = stopsList.map(s=>`${s.lat},${s.lon}`).join('+to:');
+        return `https://maps.apple.com/?daddr=${parts}&dirflg=d`;
+      }
+    },
+    {
+      ico:'2G', bg:'#1ba73a', name:'2GIS', sub: t('nav_app_subtitle'),
+      url: () => {
+        const points = [
+          userPos ? `${userPos.lon},${userPos.lat}` : null,
+          ...stopsList.map(s=>`${s.lon},${s.lat}`)
+        ].filter(Boolean).join('/');
+        return `https://2gis.ua/routeSearch/rsType/car/points/${points}`;
+      }
+    },
+  ];
+
+  list.innerHTML = '';
+  opts.forEach(o=>{
+    const el = document.createElement('div');
+    el.className = 'nav-option';
+    el.innerHTML = `
+      <div class="nav-ico" style="background:${o.bg}">${o.ico}</div>
+      <div style="flex:1">
+        <div class="nav-name">${o.name}</div>
+        <div class="nav-sub">${o.sub}</div>
+      </div>
+      <div class="nav-arrow">›</div>
+    `;
+    el.addEventListener('click', ()=>{
+      hapt('light');
+      const u = o.url();
+      try{
+        if(tg?.openLink) tg.openLink(u, { try_instant_view:false });
+        else window.open(u, '_blank');
+      }catch(e){ window.open(u, '_blank'); }
+      closeNavSheet();
+    });
+    list.appendChild(el);
+  });
+
+  document.getElementById('overlay-nav').classList.add('open');
+  document.getElementById('navsheet').classList.add('open');
+}
+function closeNavSheet(){
+  document.getElementById('overlay-nav').classList.remove('open');
+  document.getElementById('navsheet').classList.remove('open');
+}
+document.getElementById('open-ext-nav').addEventListener('click', openExternalNavigator);
+document.getElementById('open-ext-nav-2').addEventListener('click', openExternalNavigator);
+document.getElementById('navsheet-cancel').addEventListener('click', ()=>{ closeNavSheet(); hapt('light'); });
+document.getElementById('overlay-nav').addEventListener('click', closeNavSheet);
+
+/* ======================================================================
    NAVIGATION → SCREEN 3
 ====================================================================== */
 document.getElementById('go-btn').addEventListener('click', startNavigation);
@@ -1143,22 +1374,12 @@ function renderNavMap(){
   const el = document.getElementById('map-nav');
   if(mapNav){ mapNav.remove(); mapNav=null; }
   mapNav = L.map(el, { zoomControl:false, attributionControl:false }).setView([userPos.lat, userPos.lon], 16);
-  // Satellite imagery for navigation (Esri World Imagery)
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Esri, Maxar, Earthstar Geographics', maxZoom:19
-  }).addTo(mapNav);
-  // Fallback: if Esri fails to load
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '© CARTO', subdomains:'abcd', maxZoom:19
-  }).addTo(mapNav);
-  
-  // Add Mapbox Traffic layer (if token available)
   if(MAPBOX_TOKEN){
-    const trafficTiles = L.tileLayer(
-      `https://api.mapbox.com/v4/mapbox.mapbox-traffic-v1/{z}/{x}/{y}.png?access_token=${MAPBOX_TOKEN}`,
-      { attribution: '© Mapbox', maxZoom:18, opacity: 0.5 }
-    );
-    trafficTiles.addTo(mapNav);
+    mapboxBaseTiles().addTo(mapNav);
+    mapboxTrafficTiles().addTo(mapNav);
+  } else {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      { subdomains:'abcd', maxZoom:19 }).addTo(mapNav);
   }
 
   userMarker = L.marker([userPos.lat, userPos.lon], {
