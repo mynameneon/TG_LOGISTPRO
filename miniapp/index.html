@@ -181,10 +181,12 @@
   /* маркеры */
   .pulse-marker{width:18px;height:18px;border-radius:50%;background:var(--accent);
     border:3px solid #fff;box-shadow:0 0 0 0 rgba(79,140,255,.7);animation:pulseRing 1.8s infinite}
-  .user-arrow{width:38px;height:38px;display:flex;align-items:center;justify-content:center}
-  .user-arrow::before{content:"";width:0;height:0;
-    border-left:11px solid transparent;border-right:11px solid transparent;
-    border-bottom:22px solid var(--accent);filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
+  /* Навигационный "курсор" — треугольник-шеврон + точка-якорь.
+     viewBox центрирован на (0,0) — на точке-якоре, чтобы вращение Mapbox Marker
+     крутило стрелку вокруг реального местоположения пользователя. */
+  .user-arrow{width:46px;height:46px;display:flex;align-items:center;justify-content:center;
+    filter:drop-shadow(0 3px 6px rgba(0,0,0,.65))}
+  .user-arrow svg{width:100%;height:100%;display:block;overflow:visible}
   .num-marker{width:32px;height:32px;border-radius:50% 50% 50% 0;background:var(--accent);
     transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
     border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.4);cursor:pointer}
@@ -613,7 +615,9 @@ let currentStepIdx = 0;
 const KYIV_CENTER = [50.4501, 30.5234];
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 const OSRM = 'https://router.project-osrm.org';
-const MAPBOX_STYLE = 'mapbox://styles/mapbox/standard';
+// Standard Satellite = спутниковые снимки + векторные дороги/метки + 3D здания
+// (ближайший аналог Apple Maps Flyover). Требует Mapbox GL JS v3+.
+const MAPBOX_STYLE = 'mapbox://styles/mapbox/standard-satellite';
 let MAPBOX_TOKEN = localStorage.getItem('mapbox_token') || 'pk.eyJ1IjoibWFlc3Ryb2JsdWVudGFubyIsImEiOiJjbW9uOWpoYm4weTFvMnJyMjRpbGo4MHN0In0.LXgtVl7_MTD9SgWxAt7AjA';
 
 if(window.mapboxgl) mapboxgl.accessToken = MAPBOX_TOKEN;
@@ -1499,7 +1503,22 @@ document.getElementById('go-btn').addEventListener('click', startNavigation);
 
 function startNavigation(){
   hapt('success');
-  // отправим боту начальные данные маршрута
+
+  navState = {
+    currentIndex: 0,
+    remaining: routeData.ordered.slice(),
+    delivered: [],
+    skipped: [],
+  };
+  startTime = Date.now();
+  travelledKm = 0;
+
+  // Сохраняем активную навигацию ДО sendData — т.к. Telegram закроет мини-app
+  // сразу после sendData. При повторном открытии (кнопка "Открыть навигатор")
+  // мы восстановим эту сессию вместо экрана списка.
+  persistActiveNav();
+
+  // Шлём боту данные маршрута (бот пришлёт сообщение с кнопкой открытия навигатора)
   const payload = {
     action: 'start_route',
     stops: routeData.ordered.map((s,i)=>({
@@ -1511,17 +1530,47 @@ function startNavigation(){
   };
   try{ tg?.sendData(JSON.stringify(payload)); }catch(e){}
 
-  navState = {
-    currentIndex: 0,
-    remaining: routeData.ordered.slice(),
-    delivered: [],
-    skipped: [],
-  };
-  startTime = Date.now();
-  travelledKm = 0;
+  // Если по какой-то причине app не закрылся — покажем экран навигации локально
   showScreen('nav-screen');
   setTimeout(()=>renderNavMap(), 60);
   startWatch();
+}
+
+/* ---- Persist / resume active navigation across Mini App re-opens ---- */
+const ACTIVE_NAV_KEY = 'active_nav_v1';
+const ACTIVE_NAV_TTL_MS = 12 * 3600 * 1000; // 12 часов
+
+function persistActiveNav(){
+  try {
+    const snap = {
+      routeData,
+      userPos,
+      navState,
+      startTime,
+      travelledKm,
+      currentHeading,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(ACTIVE_NAV_KEY, JSON.stringify(snap));
+  } catch(e){
+    console.warn('persistActiveNav failed:', e);
+  }
+}
+function clearActiveNav(){
+  try { localStorage.removeItem(ACTIVE_NAV_KEY); } catch(e){}
+}
+function loadActiveNav(){
+  try {
+    const raw = localStorage.getItem(ACTIVE_NAV_KEY);
+    if(!raw) return null;
+    const snap = JSON.parse(raw);
+    if(!snap?.routeData || !snap?.navState){ clearActiveNav(); return null; }
+    if(Date.now() - (snap.savedAt || 0) > ACTIVE_NAV_TTL_MS){ clearActiveNav(); return null; }
+    return snap;
+  } catch(e){
+    clearActiveNav();
+    return null;
+  }
 }
 
 function renderNavMap(){
@@ -1589,9 +1638,16 @@ function renderNavMap(){
       stopMarkers.push({ mk, el });
     });
 
-    // Стрелка пользователя
+    // Стрелка пользователя (курсор-шеврон + якорь)
     const arrowEl = document.createElement('div');
     arrowEl.className = 'user-arrow';
+    arrowEl.innerHTML = `
+      <svg viewBox="-22 -28 44 44" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0 -24 L-11 -3 L0 -10 L11 -3 Z"
+              fill="#4f8cff" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/>
+        <circle cx="0" cy="0" r="6"   fill="#ffffff"/>
+        <circle cx="0" cy="0" r="3.2" fill="#4f8cff"/>
+      </svg>`;
     userMarker = new mapboxgl.Marker({ element: arrowEl, rotationAlignment:'map' })
       .setLngLat([userPos.lon, userPos.lat]).addTo(mapNav);
     userMarker.setRotation(currentHeading);
@@ -1710,6 +1766,7 @@ function markDelivered(){
   if(navState.remaining.length===0){
     finishRoute();
   } else {
+    persistActiveNav();
     updateHud();
   }
 }
@@ -1723,12 +1780,19 @@ document.getElementById('skip-btn').addEventListener('click', ()=>{
   navState.currentIndex++;
   hapt('warning');
   if(navState.remaining.length===0){ finishRoute(); }
-  else updateHud();
+  else { persistActiveNav(); updateHud(); }
 });
 
 document.getElementById('nav-back').addEventListener('click', ()=>{
   stopNavigation();
-  showScreen('map-screen');
+  // Пользователь вернулся к списку из навигатора — закрываем активную сессию.
+  clearActiveNav();
+  // Eсли есть построенный маршрут — на карту, иначе на список.
+  if(routeData){
+    showScreen('map-screen');
+  } else {
+    showScreen('list-screen');
+  }
   hapt('light');
 });
 
@@ -1821,6 +1885,7 @@ function startWatch(){
 ====================================================================== */
 function finishRoute(){
   stopNavigation();
+  clearActiveNav();
   const mins = Math.max(1, Math.round((Date.now()-startTime)/60000));
   const totalStops = navState.delivered.length + navState.skipped.length;
   const grid = document.getElementById('stat-grid');
@@ -1858,6 +1923,7 @@ function resetAll(){
   saveStops();
   routeData = null;
   navState = null;
+  clearActiveNav();
   renderStops();
   showScreen('list-screen');
   hapt('light');
@@ -1868,7 +1934,38 @@ function resetAll(){
 ====================================================================== */
 applyI18n();
 renderStops();
-showScreen('list-screen');
+
+// Если бот открыл мини-app повторно (кнопка «Открыть навигатор»),
+// и у нас сохранена активная сессия — восстанавливаем её и сразу на nav-screen.
+function tryResumeActiveNav(){
+  const snap = loadActiveNav();
+  if(!snap) return false;
+  try {
+    routeData      = snap.routeData;
+    userPos        = snap.userPos;
+    navState       = snap.navState;
+    startTime      = snap.startTime || Date.now();
+    travelledKm    = snap.travelledKm || 0;
+    currentHeading = snap.currentHeading || 0;
+    // Если все точки уже обработаны — не восстанавливаем навигацию
+    if(!navState?.remaining?.length){ clearActiveNav(); return false; }
+    showScreen('nav-screen');
+    setTimeout(()=>{
+      renderNavMap();
+      startWatch();
+    }, 120);
+    console.log('Resumed active navigation', navState.remaining.length, 'stops left');
+    return true;
+  } catch(e){
+    console.warn('Resume failed:', e);
+    clearActiveNav();
+    return false;
+  }
+}
+
+if(!tryResumeActiveNav()){
+  showScreen('list-screen');
+}
 </script>
 </body>
 </html>
